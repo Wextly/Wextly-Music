@@ -1,0 +1,82 @@
+{
+ "name": "Сборка APK",
+ "on": {
+  "workflow_dispatch": {},
+  "push": {
+   "tags": [
+    "v*"
+   ]
+  }
+ },
+ "permissions": {
+  "contents": "write"
+ },
+ "jobs": {
+  "build": {
+   "runs-on": "ubuntu-latest",
+   "timeout-minutes": 45,
+   "steps": [
+    {
+     "name": "Скачать код",
+     "uses": "actions/checkout@v4"
+    },
+    {
+     "name": "Установить Java 17",
+     "uses": "actions/setup-java@v4",
+     "with": {
+      "distribution": "temurin",
+      "java-version": "17"
+     }
+    },
+    {
+     "name": "Установить Gradle",
+     "uses": "gradle/actions/setup-gradle@v4",
+     "with": {
+      "gradle-version": "8.9"
+     }
+    },
+    {
+     "name": "Запомнить временный ключ подписи между сборками",
+     "uses": "actions/cache@v4",
+     "with": {
+      "path": "~/.android/debug.keystore",
+      "key": "debug-keystore-v1"
+     }
+    },
+    {
+     "name": "Подготовить ключ подписи",
+     "run": "if [ -n \"$KEYSTORE_B64\" ]; then echo \"$KEYSTORE_B64\" | base64 -d > \"$RUNNER_TEMP/release.jks\" ; echo \"KEYSTORE_FILE=$RUNNER_TEMP/release.jks\" >> \"$GITHUB_ENV\" ; echo \"Используется ваш ключ подписи\" ; else echo \"Свой ключ не задан: подпись временным ключом\" ; fi",
+     "env": {
+      "KEYSTORE_B64": "${{ secrets.KEYSTORE_B64 }}"
+     }
+    },
+    {
+     "name": "Собрать APK",
+     "run": "gradle assembleRelease --no-daemon --stacktrace",
+     "env": {
+      "KEYSTORE_PASSWORD": "${{ secrets.KEYSTORE_PASSWORD }}",
+      "KEY_ALIAS": "${{ secrets.KEY_ALIAS }}",
+      "KEY_PASSWORD": "${{ secrets.KEY_PASSWORD }}"
+     }
+    },
+    {
+     "name": "Сохранить APK",
+     "uses": "actions/upload-artifact@v4",
+     "with": {
+      "name": "wextly-player-apk",
+      "path": "app/build/outputs/apk/release/*.apk",
+      "if-no-files-found": "error"
+     }
+    },
+    {
+     "name": "Выложить APK в Releases (только для тегов v*)",
+     "if": "startsWith(github.ref, 'refs/tags/v')",
+     "uses": "softprops/action-gh-release@v2",
+     "with": {
+      "files": "app/build/outputs/apk/release/*.apk"
+     }
+    }
+   ]
+  }
+ }
+}
